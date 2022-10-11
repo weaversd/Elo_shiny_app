@@ -1,0 +1,16 @@
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(plotly)
+library(shinycssloaders)
+library(formattable)
+library(markdown)
+library(overlapping)
+
+source("www/functions.R")
+source("www/gameStatPlots.R")
+source("www/EloFunctions.R")
+source("www/OptimizeSingleFactors.R")
+source("www/calibrationFunctions.R")
+
+options(shiny.sanitize.errors = FALSE)
