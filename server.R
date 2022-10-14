@@ -4,6 +4,37 @@ source("global.R")
 
 server <- function(input, output, session) {
   
+  output$eloParamsPanel <- renderUI({
+    returnObj <- wellPanel(h3("Elo Equation Parameters"), hr(),
+              paste0("Starting Elo: ", startingElo), hr(),
+              paste0("Elo Denominator: ", EloDenom), hr(),
+              numericInput("baseK", "Base K value", 30),
+              numericInput("homeAdvantage", "Home Field Advantage", 100),
+              numericInput("MOVmultiplier", "Margin of Victory Multiplier", 1),
+              numericInput("playoffMultiplier", "Playoff Importance Multiplier", 1.2), hr(),
+              h3("Other Factors"),
+              numericInput("pctRegression", "Regression % to mean after season", 20),
+              numericInput("pctNotToInclude", "% of initial games to leave out of accuracy calculation", 10))
+    
+    if (input$useOptimizedValues) {
+      if (is.null(optimalValues())) {
+        returnObj <- "No Optmized Values"
+      } else {
+        returnObj <- wellPanel(h3("Elo Equation Parameters"), hr(),
+                               paste0("Starting Elo: ", startingElo), hr(),
+                               paste0("Elo Denominator: ", EloDenom), hr(),
+                               numericInput("baseK", "Base K value", optimalValues()$K[1]),
+                               numericInput("homeAdvantage", "Home Field Advantage", optimalValues()$HFA[1]),
+                               numericInput("MOVmultiplier", "Margin of Victory Multiplier", optimalValues()$MOV[1]),
+                               numericInput("playoffMultiplier", "Playoff Importance Multiplier", 1.2), hr(),
+                               h3("Other Factors"),
+                               numericInput("pctRegression", "Regression % to mean after season", optimalValues()$REG[1]),
+                               numericInput("pctNotToInclude", "% of initial games to leave out of accuracy calculation", 10))
+      }
+    }
+    return(returnObj)
+  })
+  
   games <- reactive({
     if (!is.null(input$games.csv)) {
       import <- read.csv(input$games.csv$datapath)
@@ -11,7 +42,6 @@ server <- function(input, output, session) {
       import <- import[order(import$date),]
       import$season <- as.character(import$season)
       import <- populate_games(import)
-      write.csv(import, "test.csv", row.names = F)
       return(import)
     }
   })
@@ -30,6 +60,9 @@ server <- function(input, output, session) {
   teamNames <- reactive({get_team_list(games())})
 
   output$teamList <- renderTable({
+    validate(
+      need(!is.null(games()), "No Data Found. Import Dataset.")
+    )
     if (!is.null(games())) {
       teamNames()
     }
@@ -82,10 +115,13 @@ server <- function(input, output, session) {
   })
   
   eloTable <- reactive({
-    table <- fill_elo_historical(games(), input$homeAdvantage, input$EloDenom,
-                        input$MOVmultiplier, input$MOVinteger,
+    validate(
+      need(!is.null(games()), "No Data Found. Import Dataset.")
+    )
+    table <- fill_elo_historical(games(), input$homeAdvantage, EloDenom,
+                        input$MOVmultiplier, MOVinteger,
                         input$baseK, input$playoffMultiplier,
-                        input$startingElo, input$pctRegression,
+                        startingElo, input$pctRegression,
                         winLossDrawDF()$tiePct[1])
     table$date <- as.character(table$date)
     return(table)
@@ -99,19 +135,8 @@ server <- function(input, output, session) {
     overlap_subset_value(eloTable(), input$pctNotToInclude)
   })
   
-  percentileScore <- reactive({
-    percentileScoreTable()$subsetLivePercentileScore[length(percentileScoreTable()$subsetLivePercentileScore)]
-  })
-  
-  weightedScore <- reactive({
-    return_weighted_score(percentileScore(), pctCorrect()/100, weightOfCorrect = input$weightCorrect)
-  })
-  
   output$overlapValue <- renderText(paste0(round(overlapValue(), 3), " overlap between home MOV and win%"))
   
-  output$percentileScore <- renderText(paste0(round(percentileScore(), 3), " percentile score between home MOV and win%"))
-  
-  output$weightedScore <- renderText(paste0(round(weightedScore()*100, 3), " weighted score (out of 100)"))
   
   output$overlapPlot <- renderPlotly(overlap_plot(eloTable(), input$pctNotToInclude))
   
@@ -121,120 +146,158 @@ server <- function(input, output, session) {
   eloPlotDataObj <- reactive(create_plotable_data(eloTable()))
 
   
-  output$eloPlot <- renderPlotly(create_elo_plot(eloPlotDataObj()[[1]], eloPlotDataObj()[[2]]))
+  output$eloPlot <- renderPlotly({
+    validate(
+      need(!is.null(eloTable()), "No data. Cannot view")
+    )
+    create_elo_plot(eloPlotDataObj()[[1]], eloPlotDataObj()[[2]])})
   
   livePctCorrectDF <- reactive(percent_correct_time_df(eloTable(),
                                                        input$pctNotToInclude))
   output$livePctCorrectPlot <- renderPlotly(plot_live_pct_correct(livePctCorrectDF(),
                                                                   input$pctNotToInclude))
   
-  output$livePercentileScorePlot <- renderPlotly(plot_live_percentile_score(percentileScoreTable(),
-                                                                            input$pctNotToInclude))
-  
-  output$liveCombinedScorePlot <- renderPlotly(plot_live_combined_score(percentileScoreTable(),
-                                                                            input$pctNotToInclude))
-  
-  percentileScoreTable <- reactive(populate_percentile_score(livePctCorrectDF(),
-                                                             input$pctNotToInclude,
-                                                             input$weightCorrect))
-  
-  output$percentileScoreDensityPlot <- renderPlotly(plot_percentile_score_density(percentileScoreTable()))
-  output$percentileScoreDistributionPlot <- renderPlotly(plot_percentile_score_distribution(percentileScoreTable()))
-  
-  calibrationDF <- reactive(create_calibration_DF(eloTable(), input$pctNotToInclude))
+  calibrationDF <- reactive({
+    validate(
+      need(!is.null(eloTable()), "No data. Cannot view")
+    )
+    create_calibration_DF(eloTable(), input$pctNotToInclude)})
   
   output$calibrationPlot <- renderPlotly(plot_calibration_curve(calibrationDF()))
   output$calibrationResidualPlot <- renderPlotly(plot_calibration_residuals(calibrationDF()))
   output$calibrationScaledResidualPlot <- renderPlotly(plot_scaled_calibration_residuals(calibrationDF()))
   
-  KoptTable <- reactive({
-    table <- optimize_K(elo_games = games(),
-                        HFARange = input$homeAdvantageRange,
-                        EloDenom = input$EloDenom,
-                        MOVmultRange = input$MOVmultiplierRange,
-                        MOVint = input$MOVinteger,
-                        playoffMult = input$playoffMultiplier,
-                        startingElo = input$startingElo,
-                        regressionMultRange = input$pctRegressionRange,
-                        drawRate = winLossDrawDF()$tiePct[1],
-                        KRange = input$baseKRange,
-                        Kiter = input$baseKIter,
-                        pctToNotInclude = input$pctNotToInclude)
+  output$residualScore <- renderText(paste0("Absolute Residual Score: ", round(return_calibration_error(calibrationDF())[1], 4)))
+  output$avgResidualScore <- renderText(paste0("Average Residual Score: ", round(return_calibration_error(calibrationDF())[2], 4)))
+  
+  optimizationRangeList <- eventReactive(input$optimizeGo, {
+    list(HFARange = input$homeAdvantageRange,
+         MOVRange = input$MOVmultiplierRange,
+         REGRange = input$pctRegressionRange,
+         KRange = input$baseKRange)
   })
   
-  output$optKtable <- renderTable(KoptTable())
+  optimizeObj <- eventReactive(input$optimizeGo, {
+    validate(
+      need(!is.null(input$baseK), "Starting Elo Parameters Not loaded. Click on 'Elo Parameters' tab first to load defaults, then return here and click 'Optimize'")
+    )
+    
+    progress <- shiny::Progress$new(style = "notification")
+    progress$set(message = "Simulating", value = 0)
+    on.exit(progress$close())
+    
+    updateProgress <- function(value = NULL, detail = NULL) {
+      if (is.null(value)) {
+        value <- progress$getValue()
+        value <- value + (progress$getMax() - value) / 100
+      }
+      progress$set(value = value, detail = detail)
+    }
+    
+    
+    optimize_residul_score(RangeList = optimizationRangeList(),
+                                        elo_games = eloTable(),
+                                        pctToNotInclude = input$pctNotToInclude,
+                                        EloDenom = EloDenom,
+                                        MOVinteger = MOVinteger,
+                                        playoffMult = input$playoffMultiplier,
+                                        startingElo = startingElo,
+                                        drawRate = winLossDrawDF()$tiePct[1],
+                                        iterationN = input$nIterations,
+                                        topN = input$topNmedian,
+                                        convergeFactor = input$ConvergenceFactor,
+                           updateProgress = updateProgress)})
   
-  MOVmultoptTable <- reactive({
-    table <- optimize_MOVmult(elo_games = games(),
-                        HFARange = input$homeAdvantageRange,
-                        EloDenom = input$EloDenom,
-                        MOVmultRange = input$MOVmultiplierRange,
-                        MOVmultiter = input$MOVmultiplierIter,
-                        MOVint = input$MOVinteger,
-                        playoffMult = input$playoffMultiplier,
-                        startingElo = input$startingElo,
-                        regressionMultRange = input$pctRegressionRange,
-                        drawRate = winLossDrawDF()$tiePct[1],
-                        KRange = input$baseKRange,
-                        pctToNotInclude = input$pctNotToInclude)
+  output$residualScorePLot <- renderPlotly(plot_residualScore_vs_Iteration(optimizeObj()))
+  output$HFARangePLot <- renderPlotly(plot_optimization_range_HFA(optimizeObj()))
+  output$REGRangePLot <- renderPlotly(plot_optimization_range_REG(optimizeObj()))
+  output$KRangePLot <- renderPlotly(plot_optimization_range_K(optimizeObj()))
+  output$MOVRangePLot <- renderPlotly(plot_optimization_range_MOV(optimizeObj()))
+  
+  optimalValues <- reactive(optimizeObj()[["optimizedValues"]])
+  
+  output$optimizedValues <- renderTable(optimalValues())
+  
+  predictionImport <- reactive({
+    if (!is.null(input$futureGames.csv)) {
+      validate(
+        need(!is.null(games()), "No historical data. Cannot predict.")
+      )
+      import <- read.csv(input$futureGames.csv$datapath)
+      return(import)
+    }
   })
   
-  output$optMOVmultable <- renderTable(MOVmultoptTable())
+  eloFutureGames <- reactive({
+    validate(
+      need(!is.null(predictionImport()), "No data. Cannot predict.")
+    )
+    fill_elo_scores_prediction(historical_elo = eloTable(),
+                                                        future_games = predictionImport(),
+                                                        startingElo = startingElo)})
   
-  
-  PctRegTable <- reactive({
-    table <- optimize_PctReg(elo_games = games(),
-                              HFARange = input$homeAdvantageRange,
-                              EloDenom = input$EloDenom,
-                              MOVmultRange = input$MOVmultiplierRange,
-                              MOVint = input$MOVinteger,
-                              playoffMult = input$playoffMultiplier,
-                              startingElo = input$startingElo,
-                              regressionMultRange = input$pctRegressionRange,
-                              regressionMultIter = input$pctRegressionIter,
-                              drawRate = winLossDrawDF()$tiePct[1],
-                              KRange = input$baseKRange,
-                              pctToNotInclude = input$pctNotToInclude)
+  eloFutureGamesPredicted <- reactive({
+    fill_winPcts_prediction(eloFutureGames(), 
+                            drawRate = winLossDrawDF()$tiePct[1],
+                            EloDenom = EloDenom,
+                            HFA = input$homeAdvantage)
   })
   
-  output$optPctRegtable <- renderTable(PctRegTable())
-  
-  
-  HFATable <- reactive({
-    table <- optimize_HFA(elo_games = games(),
-                             HFARange = input$homeAdvantageRange,
-                             HFAiter = input$homeAdvantageIter,
-                             EloDenom = input$EloDenom,
-                             MOVmultRange = input$MOVmultiplierRange,
-                             MOVint = input$MOVinteger,
-                             playoffMult = input$playoffMultiplier,
-                             startingElo = input$startingElo,
-                             regressionMultRange = input$pctRegressionRange,
-                             drawRate = winLossDrawDF()$tiePct[1],
-                             KRange = input$baseKRange,
-                             pctToNotInclude = input$pctNotToInclude)
+  output$predictedGames <- renderTable({
+    validate(
+      need(!is.null(eloFutureGamesPredicted()), "No data. Cannot predict.")
+    )
+    eloFutureGamesPredicted()
   })
   
-  output$optHFAtable <- renderTable(HFATable())
+  output$summarisedPredictions <- renderTable({
+    validate(
+      need(!is.null(eloFutureGamesPredicted()), "No data. Cannot predict.")
+    )
+    summarise_predictions(eloFutureGamesPredicted())
+  })
   
   
-  output$optKPlot <- renderPlotly(plot_opt_DF(KoptTable(),
-                                              title = "K factor Optimization",
-                                              xtitle = "K factor",
-                                              color = "hotpink"))
   
-  output$optHFAPlot <- renderPlotly(plot_opt_DF(HFATable(),
-                                              title = "Home Field Adv Optimization",
-                                              xtitle = "Home Field Adv",
-                                              color = "blue"))
+  output$downloadNFL2000.2020 <- downloadHandler(
+    filename <- function() {
+      "nfl_data 2000-2020.csv"
+    },
+    
+    content <- function(file) {
+      file.copy("exampleData/nfl_data 2000-2020.csv", file)
+    }
+  )
   
-  output$optMOVmultPlot <- renderPlotly(plot_opt_DF(MOVmultoptTable(),
-                                                title = "Margin of Victory Optimization",
-                                                xtitle = "MOV multiplier",
-                                                color = "green4"))
+  output$downloadAUDL2014.2021 <- downloadHandler(
+    filename <- function() {
+      "AUDL_data 2014-2021.csv"
+    },
+    
+    content <- function(file) {
+      file.copy("exampleData/AUDL_data 2014-2021.csv", file)
+    }
+  )
   
-  output$optPctRegPlot <- renderPlotly(plot_opt_DF(PctRegTable(),
-                                                title = "% Regression between seasons Optimization",
-                                                xtitle = "% Regression",
-                                                color = "purple"))
+  output$downloadNFL2021 <- downloadHandler(
+    filename <- function() {
+      "nfl games 2021 empty.csv"
+    },
+    
+    content <- function(file) {
+      file.copy("exampleData/nfl_data 2021 noPlayoffs.csv", file)
+    }
+  )
+  
+  output$downloadAUDL2022 <- downloadHandler(
+    filename <- function() {
+      "AUDL_data reg season games 2022.csv"
+    },
+    
+    content <- function(file) {
+      file.copy("exampleData/AUDL_data reg season games 2022.csv", file)
+    }
+  )
+  
+  
 }

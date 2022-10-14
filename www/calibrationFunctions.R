@@ -13,32 +13,37 @@ create_calibration_DF <- function(elo_games, pctToNotInclude) {
       elo_games$homeWinner[i] <- 0
     }
   }
+
   
   bins <- seq(0,1, 0.05)
   binDFs <- list()
   calibrationDF <- data.frame(expWinPct = bins[1:length(bins) - 1] + 0.025,
                               actualWinPct = NA,
                               count = NA)
-  
+
   for (i in 1:nrow(calibrationDF)) {
     df <- elo_games[elo_games$homeWinPct > calibrationDF$expWinPct[i] & elo_games$homeWinPct <= calibrationDF$expWinPct[i] + 0.05,]
-    df$bin <- calibrationDF$expWinPct[i]
-    calibrationDF$count[i] <- nrow(df)
-    calibrationDF$actualWinPct[i] <- sum(df$homeWinner) / nrow(df)
-    binDFs[[length(binDFs) + 1]] <- df
+    if(nrow(df) > 0) {
+      df$bin <- calibrationDF$expWinPct[i]
+      calibrationDF$count[i] <- nrow(df)
+      calibrationDF$actualWinPct[i] <- sum(df$homeWinner) / nrow(df)
+      binDFs[[length(binDFs) + 1]] <- df
+    } else {
+      calibrationDF$count[i] <- 0
+    }
   }
-  
+
   calibrationDF$residual <- calibrationDF$actualWinPct - calibrationDF$expWinPct
-  calibrationDF$scaledResidual <- (calibrationDF$residual * calibrationDF$count) / sum(calibrationDF$count)
+  calibrationDF$scaledResidual <- (calibrationDF$residual * calibrationDF$count) / sum(calibrationDF$count, na.rm = T)
   calibrationDF$absResidual <- abs(calibrationDF$residual)
   calibrationDF$absScaledResidual <- abs(calibrationDF$scaledResidual)
-  
+
   return(calibrationDF)
 }
 
 return_calibration_error <- function(calibrationDF) {
-  error <- sum(calibrationDF$absScaledResidual)
-  averageError <- sum(calibrationDF$scaledResidual)
+  error <- sum(calibrationDF$absScaledResidual, na.rm = T)
+  averageError <- sum(calibrationDF$scaledResidual, na.rm = T)
   
   return(c(error, averageError))
 }
@@ -67,7 +72,7 @@ plot_calibration_residuals <- function(calibrationDF) {
              theme_bw(base_size = 10) +
              theme(panel.grid = element_blank()) +
              labs(x = "Expected Win Percent",
-                  y = "Difference From Actual",
+                  y = "Difference From Predicted",
                   size = "Number\nof\ngames",
                   title = "Residual Plot") +
              geom_segment(aes(x = expWinPct, xend = expWinPct, y = residual, yend = 0), color = "red",
@@ -82,7 +87,7 @@ plot_scaled_calibration_residuals <- function(calibrationDF) {
              theme_bw(base_size = 10) +
              theme(panel.grid = element_blank()) +
              labs(x = "Expected Win Percent",
-                  y = "Difference From Actual scaled by number of games in bin",
+                  y = "Difference From Predicted scaled by number of games in bin",
                   size = "Number\nof\ngames",
                   title = "Scaled Residual Plot") +
              geom_segment(aes(x = expWinPct, xend = expWinPct, y = scaledResidual, yend = 0), color = "red",
