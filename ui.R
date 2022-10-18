@@ -1,6 +1,8 @@
 library(shiny)
 
 ui <- navbarPage("Elo Prediction Creator",
+                 tabPanel("Instructions",
+                          includeMarkdown("Documentation.md")),
                  tabPanel("Data Import",
                           fluidRow(wellPanel(fileInput("games.csv", "Upload games .csv file",
                                                        accept = ".csv"))),
