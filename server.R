@@ -299,5 +299,13 @@ server <- function(input, output, session) {
     }
   )
   
-  
+  output$downloadEloTable <- downloadHandler(
+    filename <- function() {
+      "EloResults.csv"
+    },
+    
+    content <- function(file) {
+      write.csv(eloTable(), file, row.names = FALSE)
+    }
+  )
 }

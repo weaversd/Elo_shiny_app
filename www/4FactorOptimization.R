@@ -25,11 +25,7 @@ runReplicate <- function(RangeList,
       text <- paste0("Iteration: ", iterationN)
       value <- i / nrow(testConditions)
       updateProgress(detail = text, value = value)
-    } else {
-      print("no progress bar")
-    }
-    
-    #print(paste0(round(i/nrow(testConditions) * 100, 1), "% Complete"))
+    } 
     data <- fill_elo_historical(elo_games = elo_games, HFA = testConditions$HFA[i],
                                 EloDenom = EloDenom,
                                 MOVmult = testConditions$MOV[i],
@@ -210,38 +206,3 @@ plot_optimization_range_MOV <- function(OptimizationObj) {
     theme(legend.position = "none")
   return(ggplotly(plot))
 }
-
-# 
-# 
-# 
-# 
-# 
-# HFARange <- c(50,150)
-# MOVRange <- c(0.5,2.5)
-# REGRange <- c(0,60)
-# KRange <- c(10,60)
-# 
-# RangeList <- list(HFARange = HFARange,
-#                   MOVRange = MOVRange,
-#                   REGRange = REGRange,
-#                   KRange = KRange)
-# 
-# test <- optimize_residul_score(RangeList = RangeList, elo_games = elo_games, pctToNotInclude = 10,
-#                                EloDenom = 400, MOVinteger = 1, playoffMult = 1.2, startingElo = 400,
-#                                drawRate = 0.16, iterationN = 5, topN = 10, convergeFactor = 0.5)
-# 
-# ggplot() +
-#   geom_point(data = test$allRanges, aes(x = iteration, y = HFARange, color = as.factor(iteration)), size = 4) +
-#   labs(x = "iteration", y = "HFA", title = "HFA Optimization")
-# 
-# ggplot() + 
-#   geom_jitter(data = test$allTrialResults, aes(x = as.numeric(iteration), y = residualScore),
-#               height = 0, width = .1) +
-#   scale_y_continuous(trans = "log2") +
-#   #geom_point(data = test$allMedians, aes(x = iterationN, y = residualScore),
-#   #           color = "hotpink", size = 5) +
-#   labs(y = "Residual Score", x = "iteration")
-# 
-# test$allMedians$iterationN <- 1:nrow(test$allMedians)
-# 
-# test$allCalculatedValues
