@@ -25,7 +25,7 @@ By Simon D. Weaver
 Source code can be found on [GitHub](https://github.com/weaversd/Elo_shiny_app)  
 
 ## Theory  
-Article describing the theory and validation behind this app can be downloaded [here](Elo_App_Article_WeaverSD.pdf)  
+Article describing the theory and validation behind this app can be [downloaded here](Elo_App_Article_WeaverSD.pdf), and the supporting information can be [downloaded here](Supporting_Information_Elo_App.pdf)  
 
 ## How to use:
 The workflow of this app is:  
